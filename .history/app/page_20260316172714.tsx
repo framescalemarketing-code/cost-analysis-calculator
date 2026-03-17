@@ -11,6 +11,7 @@ import {
   calcFullyManaged,
   calcOperationalImpact,
   calcSavingsVsEmployerManaged,
+  calcBreakeven,
   calcScaleData,
 } from "./lib/calculations";
 
@@ -235,24 +236,17 @@ export default function HomePage() {
     [em, fm, impact, d],
   );
 
+  /* ── Breakeven ── */
+  const breakeven = useMemo(
+    () => calcBreakeven(workers, d, fmPricing),
+    [workers, d, fmPricing.eyewearCostPerWorker, fmPricing.onboardingFee],
+  );
+
   /* ── Scale chart data ── */
   const scaleData = useMemo(() => {
     const chartMax = Math.max(workers * 2.5, 200);
     return calcScaleData(d, chartMax, 60, fmPricing);
   }, [workers, d, fmPricing.eyewearCostPerWorker, fmPricing.onboardingFee]);
-
-  const crossoverWorkers = useMemo(() => {
-    const first = scaleData.find(
-      (p) => p.workers > 0 && p.fullyManagedCost <= p.employerManagedCost,
-    );
-    return first?.workers ?? null;
-  }, [scaleData]);
-
-  const isFmLowerAtInput = fm.totalCost <= em.totalCost;
-  const fmLowerAtAllScales = useMemo(
-    () => scaleData.filter((p) => p.workers > 0).every((p) => p.fullyManagedCost <= p.employerManagedCost),
-    [scaleData],
-  );
 
   return (
     <main className="page">
@@ -553,17 +547,17 @@ export default function HomePage() {
       {/* ── PART 3: SCALE THRESHOLD ── */}
       <section className="card part-card">
         <div className="part-label">Part 3</div>
-        <h2>Scale Value: Cost Performance by Workforce Size</h2>
+        <h2>Scale Threshold: When Does Fully Managed Pay Off?</h2>
         <p className="section-sub">
           A Fully Managed Program carries a one-time onboarding fee (shown amortized
           over {3} years) but delivers lower per-worker operating costs. This chart
-          shows whether savings overtake that upfront investment and at what scale.
+          shows where the cumulative savings overtake that upfront investment.
         </p>
 
         <ScaleChart
           data={scaleData}
           userWorkers={workers}
-          breakevenWorkers={fmLowerAtAllScales ? null : crossoverWorkers}
+          breakevenWorkers={breakeven.breakevenWorkers}
         />
 
         <div className="chart-legend">
@@ -571,7 +565,7 @@ export default function HomePage() {
           <span><i style={{ background: "#16a34a" }} />Fully Managed Program</span>
           <span><i style={{ background: "#94a3b8" }} />No Program (exposure)</span>
           <span><i style={{ background: "#3b82f6" }} />Your workforce</span>
-          {!fmLowerAtAllScales && crossoverWorkers != null && (
+          {breakeven.breakevenWorkers != null && (
             <span><i style={{ background: "#f59e0b" }} />Breakeven point</span>
           )}
         </div>
@@ -582,11 +576,9 @@ export default function HomePage() {
             <div className="threshold-item">
               <span className="threshold-label">Breakeven threshold</span>
               <span className="threshold-value">
-                {fmLowerAtAllScales
-                  ? "Favorable from first worker"
-                  : crossoverWorkers != null
-                    ? `${num(crossoverWorkers, 0)} workers`
-                  : "No crossover (Employer Managed stays lower-cost)"
+                {breakeven.breakevenWorkers != null
+                  ? `${num(breakeven.breakevenWorkers, 0)} workers`
+                  : "Not favorable at any scale"
                 }
               </span>
             </div>
@@ -596,37 +588,26 @@ export default function HomePage() {
             </div>
             <div className="threshold-item">
               <span className="threshold-label">Status</span>
-              <span className={`threshold-value ${isFmLowerAtInput ? "positive" : "warn-text"}`}>
-                {fmLowerAtAllScales
-                  ? "Favorable at all scales"
-                  : isFmLowerAtInput
-                    ? "Favorable at your size"
-                    : "Not favorable at your size"
-                }
+              <span className={`threshold-value ${breakeven.isAboveBreakeven ? "positive" : "warn-text"}`}>
+                {breakeven.isAboveBreakeven ? "Above threshold" : "Below threshold"}
               </span>
             </div>
           </div>
 
-          {!fmLowerAtAllScales && crossoverWorkers != null && (
+          {breakeven.breakevenWorkers != null && (
             <p className="threshold-message">
-              {isFmLowerAtInput
-                ? `Fully Managed becomes more economical above about ${num(crossoverWorkers, 0)} workers. At your current size of ${num(workers, 0)}, Fully Managed is the lower-cost option.`
-                : `At your current size of ${num(workers, 0)} workers, Employer Managed may be lower-cost. Fully Managed becomes favorable above about ${num(crossoverWorkers, 0)} workers.`
+              {breakeven.isAboveBreakeven
+                ? `Fully Managed Program becomes more economical above about ${num(breakeven.breakevenWorkers, 0)} workers. At your current size of ${num(workers, 0)}, the Fully Managed approach is the lower-cost option.`
+                : `At your current size of ${num(workers, 0)} workers, the Employer Managed Program may be more economical. Fully Managed becomes favorable above about ${num(breakeven.breakevenWorkers, 0)} workers.`
               }
             </p>
           )}
-          {fmLowerAtAllScales && (
+          {breakeven.breakevenWorkers == null && (
             <p className="threshold-message">
-              Under these assumptions and selected package/tier, Fully Managed
-              is already the lower-cost model at your current size and remains
-              favorable as workforce size increases.
-            </p>
-          )}
-          {!fmLowerAtAllScales && crossoverWorkers == null && (
-            <p className="threshold-message">
-              With this pricing scenario, Employer Managed remains the lower-cost
-              option at all workforce sizes. Fully Managed may still be preferred
-              for employee experience, compliance quality, and operational control.
+              Under the current industry assumptions for {industry}, the variable
+              savings per worker are not sufficient to offset the fixed cost
+              difference. An Employer Managed Program appears more economical at
+              all scales.
             </p>
           )}
         </div>
@@ -667,31 +648,24 @@ export default function HomePage() {
           </div>
         </div>
         <div className="bl-sentence">
-          {fmLowerAtAllScales && (
+          {breakeven.breakevenWorkers != null && breakeven.isAboveBreakeven && (
             <p>
-              With your selected pricing profile, Fully Managed is cost-favorable
-              from the first worker and remains favorable as scale grows.
-            </p>
-          )}
-          {!fmLowerAtAllScales && crossoverWorkers != null && isFmLowerAtInput && (
-            <p>
-              For organizations with about {num(crossoverWorkers, 0)} or
+              For organizations with about {num(breakeven.breakevenWorkers, 0)} or
               more workers needing safety eyewear, a Fully Managed Program becomes
-              the more economical operating model under current assumptions.
+              the more economical operating model under current industry assumptions.
             </p>
           )}
-          {!fmLowerAtAllScales && crossoverWorkers != null && !isFmLowerAtInput && (
+          {breakeven.breakevenWorkers != null && !breakeven.isAboveBreakeven && (
             <p>
               At {num(workers, 0)} workers, an Employer Managed Program is currently
-              lower-cost. Fully Managed becomes more economical above about
-              {" "}{num(crossoverWorkers, 0)} workers.
+              the lower-cost approach. A Fully Managed Program becomes more
+              economical above about {num(breakeven.breakevenWorkers, 0)} workers.
             </p>
           )}
-          {!fmLowerAtAllScales && crossoverWorkers == null && (
+          {breakeven.breakevenWorkers == null && (
             <p>
-              Under this pricing scenario, Employer Managed remains the lower-cost
-              structure at all workforce sizes, while Fully Managed may still win
-              on adoption, consistency, and employee experience.
+              Under current {industry} assumptions, an Employer Managed Program
+              remains the lower-cost structure at all workforce sizes.
             </p>
           )}
         </div>
@@ -707,12 +681,11 @@ export default function HomePage() {
           BLS Survey of Occupational Injuries and Illnesses (SOII) for injury rates,
           NSC Injury Facts and NCCI claims data for direct costs,
           Liberty Mutual / Stanford research for indirect cost multipliers,
-          OSHA 2025 penalty schedules (${num(d.avgCitationCost, 0)} serious citation max),
+          OSHA FY2024 penalty schedules (${num(d.avgCitationCost, 0)} avg serious citation),
           and EHS program management benchmarks for admin and productivity time.
           Every formula scales with your eligible workforce size. The single input
-          from you is the number of workers needing safety eyewear plus your selected
-          package, service tier, and onboarding complexity; everything else reflects
-          published industry assumptions that can be reviewed and adjusted.
+          from you is the number of workers needing safety eyewear; everything else
+          reflects industry-verified assumptions that can be reviewed and adjusted.
         </p>
       </section>
     </main>

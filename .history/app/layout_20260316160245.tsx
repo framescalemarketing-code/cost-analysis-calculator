@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Safety Eyewear Savings Calculator",
-  description: "Compare the cost of no program, an employer managed program, and a fully managed safety eyewear program — with honest breakeven analysis.",
+  description: "Find out what workplace eye injuries really cost your business — and how much a managed safety eyewear program can save you.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

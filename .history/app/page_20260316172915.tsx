@@ -707,12 +707,11 @@ export default function HomePage() {
           BLS Survey of Occupational Injuries and Illnesses (SOII) for injury rates,
           NSC Injury Facts and NCCI claims data for direct costs,
           Liberty Mutual / Stanford research for indirect cost multipliers,
-          OSHA 2025 penalty schedules (${num(d.avgCitationCost, 0)} serious citation max),
+          OSHA FY2024 penalty schedules (${num(d.avgCitationCost, 0)} avg serious citation),
           and EHS program management benchmarks for admin and productivity time.
           Every formula scales with your eligible workforce size. The single input
-          from you is the number of workers needing safety eyewear plus your selected
-          package, service tier, and onboarding complexity; everything else reflects
-          published industry assumptions that can be reviewed and adjusted.
+          from you is the number of workers needing safety eyewear; everything else
+          reflects industry-verified assumptions that can be reviewed and adjusted.
         </p>
       </section>
     </main>

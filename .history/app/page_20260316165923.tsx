@@ -11,32 +11,10 @@ import {
   calcFullyManaged,
   calcOperationalImpact,
   calcSavingsVsEmployerManaged,
+  calcSavingsVsNoProgram,
+  calcBreakeven,
   calcScaleData,
 } from "./lib/calculations";
-
-type PackageOption = "Compliance" | "Comfort" | "Complete OS" | "Covered";
-type ServiceOption = "Essential" | "Access" | "Premier" | "Enterprise";
-type SiteProfile = "Single Site" | "Multi-Site" | "Enterprise";
-
-const PACKAGE_PRICE: Record<PackageOption, number> = {
-  Compliance: 235,
-  Comfort: 290,
-  "Complete OS": 435,
-  Covered: 500,
-};
-
-const SERVICE_PRICE: Record<ServiceOption, number> = {
-  Essential: 65,
-  Access: 85,
-  Premier: 105,
-  Enterprise: 130,
-};
-
-const ONBOARDING_BY_SITE: Record<SiteProfile, number> = {
-  "Single Site": 2500,
-  "Multi-Site": 9000,
-  Enterprise: 15000,
-};
 
 /* ── formatting helpers ─────────────────────────────── */
 
@@ -200,19 +178,8 @@ function ScaleChart({
 export default function HomePage() {
   const [workers, setWorkers] = useState(500);
   const [industry, setIndustry] = useState<IndustryKey>("Manufacturing");
-  const [packageOption, setPackageOption] = useState<PackageOption>("Compliance");
-  const [serviceOption, setServiceOption] = useState<ServiceOption>("Essential");
-  const [siteProfile, setSiteProfile] = useState<SiteProfile>("Single Site");
 
   const d = INDUSTRIES[industry];
-
-  const fullyManagedPricePerWorker =
-    PACKAGE_PRICE[packageOption] + SERVICE_PRICE[serviceOption];
-  const onboardingFee = ONBOARDING_BY_SITE[siteProfile];
-  const fmPricing = {
-    eyewearCostPerWorker: fullyManagedPricePerWorker,
-    onboardingFee,
-  };
 
   /* ── No Program ── */
   const noProgram = useMemo(() => calcNoProgram(workers, d), [workers, d]);
@@ -221,10 +188,7 @@ export default function HomePage() {
   const em = useMemo(() => calcEmployerManaged(workers, d), [workers, d]);
 
   /* ── Fully Managed ── */
-  const fm = useMemo(
-    () => calcFullyManaged(workers, d, fmPricing),
-    [workers, d, fmPricing.eyewearCostPerWorker, fmPricing.onboardingFee],
-  );
+  const fm = useMemo(() => calcFullyManaged(workers, d), [workers, d]);
 
   /* ── Operational Impact ── */
   const impact = useMemo(() => calcOperationalImpact(em, fm), [em, fm]);
@@ -235,24 +199,20 @@ export default function HomePage() {
     [em, fm, impact, d],
   );
 
+  /* ── No Program comparison ── */
+  const npComparison = useMemo(
+    () => calcSavingsVsNoProgram(noProgram, fm),
+    [noProgram, fm],
+  );
+
+  /* ── Breakeven ── */
+  const breakeven = useMemo(() => calcBreakeven(workers, d), [workers, d]);
+
   /* ── Scale chart data ── */
   const scaleData = useMemo(() => {
     const chartMax = Math.max(workers * 2.5, 200);
-    return calcScaleData(d, chartMax, 60, fmPricing);
-  }, [workers, d, fmPricing.eyewearCostPerWorker, fmPricing.onboardingFee]);
-
-  const crossoverWorkers = useMemo(() => {
-    const first = scaleData.find(
-      (p) => p.workers > 0 && p.fullyManagedCost <= p.employerManagedCost,
-    );
-    return first?.workers ?? null;
-  }, [scaleData]);
-
-  const isFmLowerAtInput = fm.totalCost <= em.totalCost;
-  const fmLowerAtAllScales = useMemo(
-    () => scaleData.filter((p) => p.workers > 0).every((p) => p.fullyManagedCost <= p.employerManagedCost),
-    [scaleData],
-  );
+    return calcScaleData(d, chartMax, 60);
+  }, [workers, d]);
 
   return (
     <main className="page">
@@ -310,64 +270,6 @@ export default function HomePage() {
               </button>
             ))}
           </div>
-        </div>
-
-        <div className="industry-pick" style={{ marginTop: 16 }}>
-          <p>
-            Fully Managed pricing model <span className="avg-tag">Your package + tier</span>
-          </p>
-          <div className="input-row" style={{ marginTop: 10 }}>
-            <label className="big-field" htmlFor="package-option">
-              <span>Eyewear package</span>
-              <div className="input-wrap">
-                <select
-                  id="package-option"
-                  value={packageOption}
-                  onChange={(e) => setPackageOption(e.target.value as PackageOption)}
-                >
-                  <option value="Compliance">Compliance ($235)</option>
-                  <option value="Comfort">Comfort ($290)</option>
-                  <option value="Complete OS">Complete OS ($435)</option>
-                  <option value="Covered">Covered (default $500)</option>
-                </select>
-              </div>
-            </label>
-
-            <label className="big-field" htmlFor="service-option">
-              <span>Service tier</span>
-              <div className="input-wrap">
-                <select
-                  id="service-option"
-                  value={serviceOption}
-                  onChange={(e) => setServiceOption(e.target.value as ServiceOption)}
-                >
-                  <option value="Essential">Essential ($65)</option>
-                  <option value="Access">Access ($85)</option>
-                  <option value="Premier">Premier ($105)</option>
-                  <option value="Enterprise">Enterprise (default $130)</option>
-                </select>
-              </div>
-            </label>
-
-            <label className="big-field" htmlFor="site-profile">
-              <span>Onboarding complexity</span>
-              <div className="input-wrap">
-                <select
-                  id="site-profile"
-                  value={siteProfile}
-                  onChange={(e) => setSiteProfile(e.target.value as SiteProfile)}
-                >
-                  <option value="Single Site">Single Site ($2,500)</option>
-                  <option value="Multi-Site">Multi-Site (~10 locations) ($9,000)</option>
-                  <option value="Enterprise">Enterprise 10+ sites ($15,000)</option>
-                </select>
-              </div>
-            </label>
-          </div>
-          <p className="section-sub" style={{ marginTop: 8 }}>
-            Fully Managed per-worker price in this scenario: {currency(fullyManagedPricePerWorker)}
-            {" "}(package + service).
-          </p>
         </div>
       </section>
 
@@ -553,17 +455,17 @@ export default function HomePage() {
       {/* ── PART 3: SCALE THRESHOLD ── */}
       <section className="card part-card">
         <div className="part-label">Part 3</div>
-        <h2>Scale Value: Cost Performance by Workforce Size</h2>
+        <h2>Scale Threshold: When Does Fully Managed Pay Off?</h2>
         <p className="section-sub">
           A Fully Managed Program carries a one-time onboarding fee (shown amortized
           over {3} years) but delivers lower per-worker operating costs. This chart
-          shows whether savings overtake that upfront investment and at what scale.
+          shows where the cumulative savings overtake that upfront investment.
         </p>
 
         <ScaleChart
           data={scaleData}
           userWorkers={workers}
-          breakevenWorkers={fmLowerAtAllScales ? null : crossoverWorkers}
+          breakevenWorkers={breakeven.breakevenWorkers}
         />
 
         <div className="chart-legend">
@@ -571,7 +473,7 @@ export default function HomePage() {
           <span><i style={{ background: "#16a34a" }} />Fully Managed Program</span>
           <span><i style={{ background: "#94a3b8" }} />No Program (exposure)</span>
           <span><i style={{ background: "#3b82f6" }} />Your workforce</span>
-          {!fmLowerAtAllScales && crossoverWorkers != null && (
+          {breakeven.breakevenWorkers != null && (
             <span><i style={{ background: "#f59e0b" }} />Breakeven point</span>
           )}
         </div>
@@ -582,11 +484,9 @@ export default function HomePage() {
             <div className="threshold-item">
               <span className="threshold-label">Breakeven threshold</span>
               <span className="threshold-value">
-                {fmLowerAtAllScales
-                  ? "Favorable from first worker"
-                  : crossoverWorkers != null
-                    ? `${num(crossoverWorkers, 0)} workers`
-                  : "No crossover (Employer Managed stays lower-cost)"
+                {breakeven.breakevenWorkers != null
+                  ? `${num(breakeven.breakevenWorkers, 0)} workers`
+                  : "Not favorable at any scale"
                 }
               </span>
             </div>
@@ -596,37 +496,26 @@ export default function HomePage() {
             </div>
             <div className="threshold-item">
               <span className="threshold-label">Status</span>
-              <span className={`threshold-value ${isFmLowerAtInput ? "positive" : "warn-text"}`}>
-                {fmLowerAtAllScales
-                  ? "Favorable at all scales"
-                  : isFmLowerAtInput
-                    ? "Favorable at your size"
-                    : "Not favorable at your size"
-                }
+              <span className={`threshold-value ${breakeven.isAboveBreakeven ? "positive" : "warn-text"}`}>
+                {breakeven.isAboveBreakeven ? "Above threshold" : "Below threshold"}
               </span>
             </div>
           </div>
 
-          {!fmLowerAtAllScales && crossoverWorkers != null && (
+          {breakeven.breakevenWorkers != null && (
             <p className="threshold-message">
-              {isFmLowerAtInput
-                ? `Fully Managed becomes more economical above about ${num(crossoverWorkers, 0)} workers. At your current size of ${num(workers, 0)}, Fully Managed is the lower-cost option.`
-                : `At your current size of ${num(workers, 0)} workers, Employer Managed may be lower-cost. Fully Managed becomes favorable above about ${num(crossoverWorkers, 0)} workers.`
+              {breakeven.isAboveBreakeven
+                ? `Fully Managed Program becomes more economical above about ${num(breakeven.breakevenWorkers, 0)} workers. At your current size of ${num(workers, 0)}, the Fully Managed approach is the lower-cost option.`
+                : `At your current size of ${num(workers, 0)} workers, the Employer Managed Program may be more economical. Fully Managed becomes favorable above about ${num(breakeven.breakevenWorkers, 0)} workers.`
               }
             </p>
           )}
-          {fmLowerAtAllScales && (
+          {breakeven.breakevenWorkers == null && (
             <p className="threshold-message">
-              Under these assumptions and selected package/tier, Fully Managed
-              is already the lower-cost model at your current size and remains
-              favorable as workforce size increases.
-            </p>
-          )}
-          {!fmLowerAtAllScales && crossoverWorkers == null && (
-            <p className="threshold-message">
-              With this pricing scenario, Employer Managed remains the lower-cost
-              option at all workforce sizes. Fully Managed may still be preferred
-              for employee experience, compliance quality, and operational control.
+              Under the current industry assumptions for {industry}, the variable
+              savings per worker are not sufficient to offset the fixed cost
+              difference. An Employer Managed Program appears more economical at
+              all scales.
             </p>
           )}
         </div>
@@ -667,37 +556,56 @@ export default function HomePage() {
           </div>
         </div>
         <div className="bl-sentence">
-          {fmLowerAtAllScales && (
+          {breakeven.breakevenWorkers != null && breakeven.isAboveBreakeven && (
             <p>
-              With your selected pricing profile, Fully Managed is cost-favorable
-              from the first worker and remains favorable as scale grows.
-            </p>
-          )}
-          {!fmLowerAtAllScales && crossoverWorkers != null && isFmLowerAtInput && (
-            <p>
-              For organizations with about {num(crossoverWorkers, 0)} or
+              For organizations with about {num(breakeven.breakevenWorkers, 0)} or
               more workers needing safety eyewear, a Fully Managed Program becomes
-              the more economical operating model under current assumptions.
+              the more economical operating model under current industry assumptions.
             </p>
           )}
-          {!fmLowerAtAllScales && crossoverWorkers != null && !isFmLowerAtInput && (
+          {breakeven.breakevenWorkers != null && !breakeven.isAboveBreakeven && (
             <p>
               At {num(workers, 0)} workers, an Employer Managed Program is currently
-              lower-cost. Fully Managed becomes more economical above about
-              {" "}{num(crossoverWorkers, 0)} workers.
+              the lower-cost approach. A Fully Managed Program becomes more
+              economical above about {num(breakeven.breakevenWorkers, 0)} workers.
             </p>
           )}
-          {!fmLowerAtAllScales && crossoverWorkers == null && (
+          {breakeven.breakevenWorkers == null && (
             <p>
-              Under this pricing scenario, Employer Managed remains the lower-cost
-              structure at all workforce sizes, while Fully Managed may still win
-              on adoption, consistency, and employee experience.
+              Under current {industry} assumptions, an Employer Managed Program
+              remains the lower-cost structure at all workforce sizes.
             </p>
           )}
         </div>
       </section>
 
-
+      {/* ── NO PROGRAM COMPARISON ── */}
+      <section className="card part-card">
+        <h2>Compared to Having No Program</h2>
+        <p className="section-sub">
+          Regardless of which program model you choose, the improvement over
+          no program is substantial.
+        </p>
+        <div className="result-grid two-col" style={{ marginTop: 12 }}>
+          <div className={`result-card ${npComparison.netSavingsVsNoProgram >= 0 ? "safe" : "warn"}`}>
+            <h3>{npComparison.netSavingsVsNoProgram >= 0 ? "Annual Savings vs. No Program" : "Annual Program Investment"}</h3>
+            <p className={`big-num ${npComparison.netSavingsVsNoProgram >= 0 ? "positive" : ""}`}>
+              {currency(Math.abs(npComparison.netSavingsVsNoProgram))}
+            </p>
+            <small>
+              {npComparison.netSavingsVsNoProgram >= 0
+                ? "reduced annual exposure with a Fully Managed Program"
+                : "annual cost above estimated no-program exposure \u2014 the price of reducing injury risk and ensuring compliance"
+              }
+            </small>
+          </div>
+          <div className="result-card safe">
+            <h3>Injuries Prevented</h3>
+            <p className="big-num positive">{num(npComparison.injuriesPreventedVsNoProgram, 2)}</p>
+            <small>fewer expected eye injuries per year</small>
+          </div>
+        </div>
+      </section>
 
       {/* ── DISCLOSURE ── */}
       <section className="card disclosure">
@@ -707,12 +615,11 @@ export default function HomePage() {
           BLS Survey of Occupational Injuries and Illnesses (SOII) for injury rates,
           NSC Injury Facts and NCCI claims data for direct costs,
           Liberty Mutual / Stanford research for indirect cost multipliers,
-          OSHA 2025 penalty schedules (${num(d.avgCitationCost, 0)} serious citation max),
+          OSHA FY2024 penalty schedules (${num(d.avgCitationCost, 0)} avg serious citation),
           and EHS program management benchmarks for admin and productivity time.
           Every formula scales with your eligible workforce size. The single input
-          from you is the number of workers needing safety eyewear plus your selected
-          package, service tier, and onboarding complexity; everything else reflects
-          published industry assumptions that can be reviewed and adjusted.
+          from you is the number of workers needing safety eyewear; everything else
+          reflects industry-verified assumptions that can be reviewed and adjusted.
         </p>
       </section>
     </main>
